@@ -110,6 +110,9 @@ static volatile uint32_t wait_intr = 0;
 /** @brief Array of cached textures in RDP TMEM indexed by the RDP texture slot */
 static sprite_cache cache[8];
 
+/** @brief Macro for advancing the display list pointer by one 64-bit command. */
+#define ADVANCE_DISPLAY_LIST_PTR ( *list = (display_list_t *)(*list + 1) )
+
 /**
  * @brief RDP interrupt handler
  *
@@ -198,6 +201,50 @@ static void __rdp_ringbuffer_queue( uint32_t data )
     /* Add data to queue to be sent to RDP */
     rdp_ringbuffer[rdp_end / 4] = data;
     rdp_end += 4;
+}
+
+void rdp_end_display_list( display_list_t **list )
+{
+    // Add a sentinel to the list to make sure we know when it's over.
+    list[0]->command = 0xFFFFFFFFFFFFFFFF;
+    ADVANCE_DISPLAY_LIST_PTR;  
+}
+
+// Pass the START and END pointers to this.
+void rdp_execute_display_list( display_list_t *list )
+{
+    int length_in_uint32s = 0;
+
+    display_list_t *current = list;
+    while(current->command != 0xFFFFFFFFFFFFFFFF)
+    {
+        length_in_uint32s += 2;
+        current = list++;        
+    }
+
+    data_cache_hit_writeback_invalidate(list, length_in_uint32s);
+
+    /* Make sure another thread doesn't attempt to render */
+    disable_interrupts();
+
+    /* Clear XBUS/Flush/Freeze */
+    ((uint32_t *)0xA4100000)[3] = 0x15;
+    MEMORY_BARRIER();
+
+    /* Don't saturate the RDP command buffer.  Another command could have been written
+     * since we checked before disabling interrupts, but it is unlikely, so we probably
+     * won't stall in this critical section long. */
+    while( (((volatile uint32_t *)0xA4100000)[3] & 0x600) ) ;
+
+    /* Send start and end of buffer location to kick off the command transfer */
+    MEMORY_BARRIER();
+    ((volatile uint32_t *)0xA4100000)[0] = ((uint32_t)list | 0xA0000000);
+    MEMORY_BARRIER();
+    ((volatile uint32_t *)0xA4100000)[1] = ((uint32_t)list | 0xA0000000) + (length_in_uint32s * 4);
+    MEMORY_BARRIER();
+
+    /* We are good now */
+    enable_interrupts();
 }
 
 /**
@@ -294,14 +341,17 @@ void rdp_close( void )
  * @param[in] disp
  *            A display context as returned by #display_lock
  */
-void rdp_attach_display( display_context_t disp )
+void rdp_attach_display( display_list_t **list, display_context_t disp )
 {
     if( disp == 0 ) { return; }
+
+    list[0]->words.hi = 0xFF000000 | ((__bitdepth == 2) ? 0x00100000 : 0x00180000) | (__width - 1);
+    list[0]->words.lo = (uint32_t)__get_buffer( disp );
+    ADVANCE_DISPLAY_LIST_PTR; 
 
     /* Set the rasterization buffer */
     __rdp_ringbuffer_queue( 0xFF000000 | ((__bitdepth == 2) ? 0x00100000 : 0x00180000) | (__width - 1) );
     __rdp_ringbuffer_queue( (uint32_t)__get_buffer( disp ) );
-    __rdp_ringbuffer_send();
 }
 
 /**
@@ -313,18 +363,19 @@ void rdp_attach_display( display_context_t disp )
  * before detaching the display context.  This should be performed before displaying the finished
  * output using #display_show
  */
-void rdp_detach_display( void )
+void rdp_detach_display( display_list_t **list )
 {
     /* Wait for SYNC_FULL to finish */
     wait_intr = 0;
 
     /* Force the RDP to rasterize everything and then interrupt us */
-    rdp_sync( SYNC_FULL );
+    rdp_sync( list, SYNC_FULL );
+
 
     if( INTERRUPTS_ENABLED == get_interrupts_state() )
     {
         /* Only wait if interrupts are enabled */
-        while( !wait_intr ) { ; }
+        //while( !wait_intr ) { ; }
     }
 
     /* Set back to zero for next detach */
@@ -344,23 +395,31 @@ void rdp_detach_display( void )
  * @param[in] sync
  *            The sync operation to perform on the RDP
  */
-void rdp_sync( sync_t sync )
+void rdp_sync( display_list_t **list, sync_t sync )
 {
     switch( sync )
     {
         case SYNC_FULL:
+            list[0]->words.hi = 0xE9000000;
             __rdp_ringbuffer_queue( 0xE9000000 );
             break;
         case SYNC_PIPE:
+            list[0]->words.hi = 0xE7000000;
             __rdp_ringbuffer_queue( 0xE7000000 );
             break;
         case SYNC_TILE:
+            list[0]->words.hi = 0xE8000000;
             __rdp_ringbuffer_queue( 0xE8000000 );
             break;
         case SYNC_LOAD:
+            list[0]->words.hi = 0xE6000000;
             __rdp_ringbuffer_queue( 0xE6000000 );
             break;
     }
+
+    list[0]->words.lo = 0x00000000;
+    ADVANCE_DISPLAY_LIST_PTR; 
+
     __rdp_ringbuffer_queue( 0x00000000 );
     __rdp_ringbuffer_send();
 }
@@ -377,21 +436,24 @@ void rdp_sync( sync_t sync )
  * @param[in] by
  *            Bottom right Y coordinate in pixels
  */
-void rdp_set_clipping( uint32_t tx, uint32_t ty, uint32_t bx, uint32_t by )
+void rdp_set_clipping( display_list_t **list, uint32_t tx, uint32_t ty, uint32_t bx, uint32_t by )
 {
+    list[0]->words.hi = ( 0xED000000 | (tx << 14) | (ty << 2) );
+    list[0]->words.lo = ( (bx << 14) | (by << 2) );
+    ADVANCE_DISPLAY_LIST_PTR; 
+
     /* Convert pixel space to screen space in command */
     __rdp_ringbuffer_queue( 0xED000000 | (tx << 14) | (ty << 2) );
     __rdp_ringbuffer_queue( (bx << 14) | (by << 2) );
-    __rdp_ringbuffer_send();
 }
 
 /**
  * @brief Set the hardware clipping boundary to the entire screen
  */
-void rdp_set_default_clipping( void )
+void rdp_set_default_clipping( display_list_t **list )
 {
     /* Clip box is the whole screen */
-    rdp_set_clipping( 0, 0, __width, __height );
+    rdp_set_clipping( list, 0, 0, __width, __height );
 }
 
 /**
@@ -399,12 +461,16 @@ void rdp_set_default_clipping( void )
  *
  * This must be called before using #rdp_draw_filled_rectangle.
  */
-void rdp_enable_primitive_fill( void )
+void rdp_enable_primitive_fill( display_list_t **list )
 {
+
+    list[0]->words.hi = ( 0xEFB000FF );
+    list[0]->words.lo = ( 0x00004000 );
+    ADVANCE_DISPLAY_LIST_PTR; 
+
     /* Set other modes to fill and other defaults */
     __rdp_ringbuffer_queue( 0xEFB000FF );
     __rdp_ringbuffer_queue( 0x00004000 );
-    __rdp_ringbuffer_send();
 }
 
 /**
@@ -416,7 +482,6 @@ void rdp_enable_blend_fill( void )
 {
     __rdp_ringbuffer_queue( 0xEF0000FF );
     __rdp_ringbuffer_queue( 0x80000000 );
-    __rdp_ringbuffer_send();
 }
 
 /**
@@ -430,7 +495,6 @@ void rdp_enable_texture_copy( void )
     /* Set other modes to copy and other defaults */
     __rdp_ringbuffer_queue( 0xEFA000FF );
     __rdp_ringbuffer_queue( 0x00004001 );
-    __rdp_ringbuffer_send();
 }
 
 /**
@@ -720,12 +784,16 @@ void rdp_draw_sprite_scaled( uint32_t texslot, int x, int y, double x_scale, dou
  * @param[in] color
  *            Color to draw primitives in
  */
-void rdp_set_primitive_color( uint32_t color )
+void rdp_set_primitive_color( display_list_t **list, uint32_t color )
 {
+    list[0]->words.hi = 0xF7000000;
+    list[0]->words.lo = color;
+    ADVANCE_DISPLAY_LIST_PTR; 
+
     /* Set packed color */
     __rdp_ringbuffer_queue( 0xF7000000 );
     __rdp_ringbuffer_queue( color );
-    __rdp_ringbuffer_send();
+    //__rdp_ringbuffer_send();
 }
 
 /**
@@ -764,14 +832,18 @@ void rdp_set_blend_color( uint32_t color )
  * @param[in] by
  *            Pixel Y location of the bottom right of the rectangle
  */
-void rdp_draw_filled_rectangle( int tx, int ty, int bx, int by )
+void rdp_draw_filled_rectangle( display_list_t **list, int tx, int ty, int bx, int by )
 {
     if( tx < 0 ) { tx = 0; }
     if( ty < 0 ) { ty = 0; }
 
+    list[0]->words.hi = 0xF6000000 | ( bx << 14 ) | ( by << 2 );
+    list[0]->words.lo = ( tx << 14 ) | ( ty << 2 );
+    ADVANCE_DISPLAY_LIST_PTR; 
+
     __rdp_ringbuffer_queue( 0xF6000000 | ( bx << 14 ) | ( by << 2 ) ); 
     __rdp_ringbuffer_queue( ( tx << 14 ) | ( ty << 2 ) );
-    __rdp_ringbuffer_send();
+    //__rdp_ringbuffer_send();
 }
 
 /**
@@ -854,6 +926,12 @@ void rdp_draw_filled_triangle( float x1, float y1, float x2, float y2, float x3,
 void rdp_set_texture_flush( flush_t flush )
 {
     flush_strategy = flush;
+}
+
+void rdp_send_buffer(display_list_t *list)
+{
+    memcpy(list, rdp_ringbuffer, 64);
+    __rdp_ringbuffer_send();
 }
 
 /** @} */
