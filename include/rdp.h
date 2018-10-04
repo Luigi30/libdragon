@@ -63,6 +63,17 @@ typedef enum
     FLUSH_STRATEGY_AUTOMATIC
 } flush_t;
 
+/**
+ * @brief Location of the display list - RDRAM or DMEM?
+ */
+typedef enum
+{
+    /** @brief Display list is in RDRAM. */
+    DISPLAY_LIST_RDRAM,
+    /** @brief Display list is in DMEM. */
+    DISPLAY_LIST_DMEM
+} display_list_location_t;
+
 /** @} */
 
 #ifdef __cplusplus
@@ -92,7 +103,7 @@ void rdp_set_texture_flush( flush_t flush );
 void rdp_close( void );
 
 void rdp_end_display_list( display_list_t **list );
-void rdp_execute_display_list( display_list_t *list, int display_list_length  );
+void rdp_execute_display_list( display_list_t *list, int display_list_length, display_list_location_t location );
 
 #ifdef __cplusplus
 }

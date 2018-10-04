@@ -222,7 +222,7 @@ void rdp_end_display_list( display_list_t **list )
  * @param[in] list
  *            A pointer to the start of a display list.
  */
-void rdp_execute_display_list( display_list_t *list, int display_list_length )
+void rdp_execute_display_list( display_list_t *list, int size, display_list_location_t location )
 {
     uint32_t length_in_uint64s = 0;
 
@@ -231,13 +231,13 @@ void rdp_execute_display_list( display_list_t *list, int display_list_length )
         length_in_uint64s++;
     }
 
-    data_cache_hit_writeback_invalidate(list, display_list_length * sizeof(display_list_t));
+    data_cache_hit_writeback_invalidate(list, size * sizeof(display_list_t));
 
     /* Make sure another thread doesn't attempt to render */
     disable_interrupts();
 
     /* Clear XBUS/Flush/Freeze */
-    ((uint32_t *)0xA4100000)[3] = 0x15;
+    ((uint32_t *)0xA4100000)[3] = (location == DISPLAY_LIST_RDRAM ? 0x15 : 0x16);
     MEMORY_BARRIER();
 
     /* Don't saturate the RDP command buffer.  Another command could have been written
@@ -246,11 +246,24 @@ void rdp_execute_display_list( display_list_t *list, int display_list_length )
     while( (((volatile uint32_t *)0xA4100000)[3] & 0x600) ) ;
 
     /* Send start and end of buffer location to kick off the command transfer */
-    MEMORY_BARRIER();
-    ((volatile uint32_t *)0xA4100000)[0] = ((uint32_t)list | 0xA0000000);
-    MEMORY_BARRIER();
-    ((volatile uint32_t *)0xA4100000)[1] = ((uint32_t)list | 0xA0000000) + length_in_uint64s*8;
-    MEMORY_BARRIER();
+    if(location == DISPLAY_LIST_RDRAM)
+    {
+        MEMORY_BARRIER();
+        ((volatile uint32_t *)0xA4100000)[0] = ((uint32_t)list | 0xA0000000);
+        MEMORY_BARRIER();
+        ((volatile uint32_t *)0xA4100000)[1] = ((uint32_t)list | 0xA0000000) + length_in_uint64s*8;
+        MEMORY_BARRIER();      
+    }
+    else
+    {
+        MEMORY_BARRIER();
+        ((volatile uint32_t *)0xA4100000)[0] = ((uint32_t)list & 0x00000FFF);
+        MEMORY_BARRIER();
+        ((volatile uint32_t *)0xA4100000)[1] = ((uint32_t)list & 0x00000FFF) + length_in_uint64s*8;
+        MEMORY_BARRIER();        
+    }
+
+
 
     /* We are good now */
     enable_interrupts();
