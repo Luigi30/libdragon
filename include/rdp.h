@@ -8,6 +8,7 @@
 
 #include "display.h"
 #include "graphics.h"
+#include "fixed.h"
 
 /**
  * @addtogroup rdp
@@ -99,6 +100,7 @@ void rdp_set_primitive_color( display_list_t **list, uint32_t color );
 void rdp_set_blend_color( display_list_t **list, uint32_t color );
 void rdp_draw_filled_rectangle( display_list_t **list, int tx, int ty, int bx, int by );
 void rdp_draw_filled_triangle( display_list_t **list, float x1, float y1, float x2, float y2, float x3, float y3 );
+void rdp_draw_filled_triangle_fixed( display_list_t **list, Fixed x1, Fixed y1, Fixed x2, Fixed y2, Fixed x3, Fixed y3 );
 void rdp_set_texture_flush( flush_t flush );
 void rdp_close( void );
 

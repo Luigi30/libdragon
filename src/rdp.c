@@ -263,8 +263,6 @@ void rdp_execute_display_list( display_list_t *list, int size, display_list_loca
         MEMORY_BARRIER();        
     }
 
-
-
     /* We are good now */
     enable_interrupts();
 }
@@ -313,7 +311,7 @@ bool rdp_attach_display( display_list_t **list, display_context_t disp )
     if( disp == 0 ) { return false; }
 
     /* Set the rasterization buffer */
-    list[0]->words.hi = 0xFF000000 | ((__bitdepth == 2) ? 0x00100000 : 0x00180000) | (__width - 1);
+    list[0]->words.hi = 0xBF000000 | ((__bitdepth == 2) ? 0x00100000 : 0x00180000) | (__width - 1);
     list[0]->words.lo = (uint32_t)__get_buffer( disp );
     ADVANCE_DISPLAY_LIST_PTR; 
 
@@ -366,16 +364,16 @@ void rdp_sync( display_list_t **list, sync_t sync )
     switch( sync )
     {
         case SYNC_FULL:
-            list[0]->words.hi = 0xE9000000;
+            list[0]->words.hi = 0xA9000000;
             break;
         case SYNC_PIPE:
-            list[0]->words.hi = 0xE7000000;
+            list[0]->words.hi = 0xA7000000;
             break;
         case SYNC_TILE:
-            list[0]->words.hi = 0xE8000000;
+            list[0]->words.hi = 0xA8000000;
             break;
         case SYNC_LOAD:
-            list[0]->words.hi = 0xE6000000;
+            list[0]->words.hi = 0xA6000000;
             break;
     }
 
@@ -398,7 +396,7 @@ void rdp_sync( display_list_t **list, sync_t sync )
 void rdp_set_clipping( display_list_t **list, uint32_t tx, uint32_t ty, uint32_t bx, uint32_t by )
 {
     /* Convert pixel space to screen space in command */
-    list[0]->words.hi = ( 0xED000000 | (tx << 14) | (ty << 2) );
+    list[0]->words.hi = ( 0xAD000000 | (tx << 14) | (ty << 2) );
     list[0]->words.lo = ( (bx << 14) | (by << 2) );
     ADVANCE_DISPLAY_LIST_PTR; 
 }
@@ -420,7 +418,7 @@ void rdp_set_default_clipping( display_list_t **list )
 void rdp_enable_primitive_fill( display_list_t **list )
 {
     /* Set other modes to fill and other defaults */
-    list[0]->words.hi = ( 0xEFB000FF );
+    list[0]->words.hi = ( 0xAFB000FF );
     list[0]->words.lo = ( 0x00004000 );
     ADVANCE_DISPLAY_LIST_PTR; 
 }
@@ -432,7 +430,7 @@ void rdp_enable_primitive_fill( display_list_t **list )
  */
 void rdp_enable_blend_fill( display_list_t **list )
 {
-    list[0]->words.hi = ( 0xEF0000FF );
+    list[0]->words.hi = ( 0xAF0000FF );
     list[0]->words.lo = ( 0x80000000 );
     ADVANCE_DISPLAY_LIST_PTR;
 }
@@ -446,7 +444,7 @@ void rdp_enable_blend_fill( display_list_t **list )
 void rdp_enable_texture_copy( display_list_t **list )
 {
     /* Set other modes to copy and other defaults */
-    list[0]->words.hi = ( 0xEFA000FF );
+    list[0]->words.hi = ( 0xAFA000FF );
     list[0]->words.lo = ( 0x00004001 );
     ADVANCE_DISPLAY_LIST_PTR;
 }
@@ -486,7 +484,7 @@ static uint32_t __rdp_load_texture( display_list_t **list, uint32_t texslot, uin
     }
 
     /* Point the RDP at the actual sprite data */
-    list[0]->words.hi = ( 0xFD000000 | ((sprite->bitdepth == 2) ? 0x00100000 : 0x00180000) | (sprite->width - 1) );
+    list[0]->words.hi = ( 0xBD000000 | ((sprite->bitdepth == 2) ? 0x00100000 : 0x00180000) | (sprite->width - 1) );
     list[0]->words.lo = ( (uint32_t)sprite->data );
     ADVANCE_DISPLAY_LIST_PTR;
 
@@ -504,13 +502,13 @@ static uint32_t __rdp_load_texture( display_list_t **list, uint32_t texslot, uin
     int round_amount = (real_width % 8) ? 1 : 0;
 
     /* Instruct the RDP to copy the sprite data out */
-    list[0]->words.hi = ( 0xF5000000 | ((sprite->bitdepth == 2) ? 0x00100000 : 0x00180000) | 
+    list[0]->words.hi = ( 0xB5000000 | ((sprite->bitdepth == 2) ? 0x00100000 : 0x00180000) | 
                                        (((((real_width / 8) + round_amount) * sprite->bitdepth) & 0x1FF) << 9) | ((texloc / 8) & 0x1FF) );
     list[0]->words.lo = ( ((texslot & 0x7) << 24) | (mirror_enabled == MIRROR_ENABLED ? 0x40100 : 0) | (hbits << 14 ) | (wbits << 4) );
     ADVANCE_DISPLAY_LIST_PTR;
 
     /* Copying out only a chunk this time */
-    list[0]->words.hi = ( 0xF4000000 | (((sl << 2) & 0xFFF) << 12) | ((tl << 2) & 0xFFF) );
+    list[0]->words.hi = ( 0xB4000000 | (((sl << 2) & 0xFFF) << 12) | ((tl << 2) & 0xFFF) );
     list[0]->words.lo = ( (((sh << 2) & 0xFFF) << 12) | ((th << 2) & 0xFFF) );
     ADVANCE_DISPLAY_LIST_PTR;
 
@@ -640,7 +638,7 @@ void rdp_draw_textured_rectangle_scaled( uint32_t texslot, int tx, int ty, int b
     int ys = (int)((1.0 / y_scale) * 1024.0);
 
     /* Set up rectangle position in screen space */
-    __rdp_ringbuffer_queue( 0xE4000000 | (bx << 14) | (by << 2) );
+    __rdp_ringbuffer_queue( 0xA4000000 | (bx << 14) | (by << 2) );
     __rdp_ringbuffer_queue( ((texslot & 0x7) << 24) | (tx << 14) | (ty << 2) );
 
     /* Set up texture position and scaling to 1:1 copy */
@@ -740,7 +738,7 @@ void rdp_draw_sprite_scaled( uint32_t texslot, int x, int y, double x_scale, dou
 void rdp_set_primitive_color( display_list_t **list, uint32_t color )
 {
     /* Set packed color */
-    list[0]->words.hi = 0xF7000000;
+    list[0]->words.hi = 0xB7000000;
     list[0]->words.lo = color;
     ADVANCE_DISPLAY_LIST_PTR; 
 }
@@ -755,7 +753,7 @@ void rdp_set_primitive_color( display_list_t **list, uint32_t color )
  */
 void rdp_set_blend_color( display_list_t **list, uint32_t color )
 {
-    list[0]->words.hi = 0xF9000000;
+    list[0]->words.hi = 0xB9000000;
     list[0]->words.lo = color;
     ADVANCE_DISPLAY_LIST_PTR; 
 }
@@ -786,7 +784,7 @@ void rdp_draw_filled_rectangle( display_list_t **list, int tx, int ty, int bx, i
     if( tx < 0 ) { tx = 0; }
     if( ty < 0 ) { ty = 0; }
 
-    list[0]->words.hi = 0xF6000000 | ( bx << 14 ) | ( by << 2 );
+    list[0]->words.hi = 0xB6000000 | ( bx << 14 ) | ( by << 2 );
     list[0]->words.lo = ( tx << 14 ) | ( ty << 2 );
     ADVANCE_DISPLAY_LIST_PTR; 
 }
@@ -813,6 +811,50 @@ void rdp_draw_filled_rectangle( display_list_t **list, int tx, int ty, int bx, i
  * @param[in] y3
  *            Pixel Y3 location of triangle
  */
+void rdp_draw_filled_triangle_fixed( display_list_t **list, Fixed x1, Fixed y1, Fixed x2, Fixed y2, Fixed x3, Fixed y3 )
+{
+    Fixed temp_x, temp_y;
+
+    /* sort vertices by Y ascending to find the major, mid and low edges */
+    if( y1 > y2 ) { temp_x = x2, temp_y = y2; y2 = y1; y1 = temp_y; x2 = x1; x1 = temp_x; }
+    if( y2 > y3 ) { temp_x = x3, temp_y = y3; y3 = y2; y2 = temp_y; x3 = x2; x2 = temp_x; }
+    if( y1 > y2 ) { temp_x = x2, temp_y = y2; y2 = y1; y1 = temp_y; x2 = x1; x1 = temp_x; }
+
+    /* calculate Y edge coefficients in 11.2 fixed format */
+    // Convert Q16 to 11.2 fixed point
+    int16_t yh = ((y1 & 0x07FF0000) >> 14) | (y1 & 0x00000002);
+    int32_t ym = (((y2 & 0x07FF0000) >> 14) | (y2 & 0x00000002)) << 16; // high word
+    int16_t yl = ((y3 & 0x07FF0000) >> 14) | (y3 & 0x00000002);
+
+    /* calculate X edge coefficients in 16.16 fixed format */
+    Fixed xh = x1;
+    Fixed xm = x1;
+    Fixed xl = x2;
+
+    /* calculate inverse slopes in 16.16 fixed format */
+    Fixed dxhdy = (y3 == y1) ? 0 : FX_Divide((x3 - x1), (y3 - y1));
+    Fixed dxmdy = (y2 == y1) ? 0 : FX_Divide((x2 - x1), (y2 - y1));
+    Fixed dxldy = (y3 == y2) ? 0 : FX_Divide((x3 - x2), (y3 - y2));
+
+    int winding = (FX_Multiply(x1, y2) - FX_Multiply(x2, y1)) 
+        + (FX_Multiply(x2, y3) - FX_Multiply(x3, y2))
+        + (FX_Multiply(x3, y1) - FX_Multiply(x1, y3));
+    int flip = (winding > 0 ? 1 : 0) << 23;
+
+    list[0]->words.hi = ( 0x88000000 | flip | yl );
+    list[0]->words.lo = ym | yh;
+    ADVANCE_DISPLAY_LIST_PTR;
+    list[0]->words.hi = xl;
+    list[0]->words.lo = dxldy;
+    ADVANCE_DISPLAY_LIST_PTR; 
+    list[0]->words.hi = xh;
+    list[0]->words.lo = dxhdy;
+    ADVANCE_DISPLAY_LIST_PTR;
+    list[0]->words.hi = xm;
+    list[0]->words.lo = dxmdy;
+    ADVANCE_DISPLAY_LIST_PTR;
+}
+
 void rdp_draw_filled_triangle( display_list_t **list, float x1, float y1, float x2, float y2, float x3, float y3 )
 {
     float temp_x, temp_y;
@@ -843,7 +885,7 @@ void rdp_draw_filled_triangle( display_list_t **list, float x1, float y1, float 
     int winding = ( x1 * y2 - x2 * y1 ) + ( x2 * y3 - x3 * y2 ) + ( x3 * y1 - x1 * y3 );
     int flip = ( winding > 0 ? 1 : 0 ) << 23;
 
-    list[0]->words.hi = ( 0xC8000000 | flip | yl );
+    list[0]->words.hi = ( 0x88000000 | flip | yl );
     list[0]->words.lo = ym | yh;
     ADVANCE_DISPLAY_LIST_PTR;
     list[0]->words.hi = xl;
