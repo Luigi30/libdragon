@@ -415,10 +415,26 @@ void rdp_set_default_clipping( display_list_t **list )
  *
  * This must be called before using #rdp_draw_filled_rectangle.
  */
-void rdp_enable_primitive_fill( display_list_t **list )
+void rdp_set_fill_color( display_list_t **list, uint32_t color )
+{
+    /* Set other modes to fill and other defaults */
+    list[0]->words.hi = ( 0xB7000000 );
+    list[0]->words.lo = ( color );
+    ADVANCE_DISPLAY_LIST_PTR; 
+}
+
+void rdp_set_fill_mode( display_list_t **list )
 {
     /* Set other modes to fill and other defaults */
     list[0]->words.hi = ( 0xAFB000FF );
+    list[0]->words.lo = ( 0x00004000 );
+    ADVANCE_DISPLAY_LIST_PTR; 
+}
+
+void rdp_set_1cycle_mode( display_list_t **list )
+{
+    /* Set other modes to fill and other defaults */
+    list[0]->words.hi = ( 0xAF8000FF );
     list[0]->words.lo = ( 0x00004000 );
     ADVANCE_DISPLAY_LIST_PTR; 
 }
@@ -430,9 +446,13 @@ void rdp_enable_primitive_fill( display_list_t **list )
  */
 void rdp_enable_blend_fill( display_list_t **list )
 {
-    list[0]->words.hi = ( 0xAF0000FF );
-    list[0]->words.lo = ( 0x80000000 );
-    ADVANCE_DISPLAY_LIST_PTR;
+    list[0]->words.hi = ( 0xAF8000FF );
+    list[0]->words.lo = ( 0x00004000 );
+
+    // ??? why is this necessary
+    uint32_t ptr = ((uint32_t)list[0]) + 4;
+    MMIO32(ptr) = 0x80000000;
+    ADVANCE_DISPLAY_LIST_PTR; 
 }
 
 /**
@@ -754,6 +774,13 @@ void rdp_set_primitive_color( display_list_t **list, uint32_t color )
 void rdp_set_blend_color( display_list_t **list, uint32_t color )
 {
     list[0]->words.hi = 0xB9000000;
+    list[0]->words.lo = color;
+    ADVANCE_DISPLAY_LIST_PTR; 
+}
+
+void rdp_set_env_color( display_list_t **list, uint32_t color )
+{
+    list[0]->words.hi = 0xBB000000;
     list[0]->words.lo = color;
     ADVANCE_DISPLAY_LIST_PTR; 
 }

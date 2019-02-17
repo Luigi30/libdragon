@@ -10,6 +10,10 @@
 #include "graphics.h"
 #include "fixed.h"
 
+#define MMIO8(x)  (*(volatile uint8_t *)(x))
+#define MMIO16(x) (*(volatile uint16_t *)(x))
+#define MMIO32(x) (*(volatile uint32_t *)(x))
+
 /**
  * @addtogroup rdp
  * @{
@@ -87,7 +91,8 @@ void rdp_detach_display( display_list_t **list );
 void rdp_sync( display_list_t **list, sync_t sync );
 void rdp_set_clipping( display_list_t **list, uint32_t tx, uint32_t ty, uint32_t bx, uint32_t by );
 void rdp_set_default_clipping( display_list_t **list );
-void rdp_enable_primitive_fill( display_list_t **list );
+void rdp_set_fill_mode( display_list_t **list );
+void rdp_set_1cycle_mode( display_list_t **list );
 void rdp_enable_blend_fill( display_list_t **list );
 void rdp_enable_texture_copy( display_list_t **list );
 uint32_t rdp_load_texture( display_list_t **list, uint32_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite );
@@ -98,11 +103,14 @@ void rdp_draw_sprite( uint32_t texslot, int x, int y );
 void rdp_draw_sprite_scaled( uint32_t texslot, int x, int y, double x_scale, double y_scale );
 void rdp_set_primitive_color( display_list_t **list, uint32_t color );
 void rdp_set_blend_color( display_list_t **list, uint32_t color );
+void rdp_set_env_color( display_list_t **list, uint32_t color );
 void rdp_draw_filled_rectangle( display_list_t **list, int tx, int ty, int bx, int by );
 void rdp_draw_filled_triangle( display_list_t **list, float x1, float y1, float x2, float y2, float x3, float y3 );
 void rdp_draw_filled_triangle_fixed( display_list_t **list, Fixed x1, Fixed y1, Fixed x2, Fixed y2, Fixed x3, Fixed y3 );
 void rdp_set_texture_flush( flush_t flush );
 void rdp_close( void );
+
+void rdp_set_fill_color( display_list_t **list, uint32_t color );
 
 void rdp_end_display_list( display_list_t **list );
 void rdp_execute_display_list( display_list_t *list, int display_list_length, display_list_location_t location );
