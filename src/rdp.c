@@ -431,14 +431,6 @@ void rdp_set_fill_mode( display_list_t **list )
     ADVANCE_DISPLAY_LIST_PTR; 
 }
 
-void rdp_set_1cycle_mode( display_list_t **list )
-{
-    /* Set other modes to fill and other defaults */
-    list[0]->words.hi = ( 0xAF8000FF );
-    list[0]->words.lo = ( 0x00004000 );
-    ADVANCE_DISPLAY_LIST_PTR; 
-}
-
 /**
  * @brief Enable display of 2D filled (untextured) triangles
  *
@@ -447,11 +439,36 @@ void rdp_set_1cycle_mode( display_list_t **list )
 void rdp_enable_blend_fill( display_list_t **list )
 {
     list[0]->words.hi = ( 0xAF8000FF );
-    list[0]->words.lo = ( 0x00004000 );
 
     // ??? why is this necessary
     uint32_t ptr = ((uint32_t)list[0]) + 4;
     MMIO32(ptr) = 0x80000000;
+    ADVANCE_DISPLAY_LIST_PTR; 
+}
+
+void rdp_set_other_modes( display_list_t **list, uint64_t mode_bits )
+{
+    /*
+    list[0]->words.hi = ( 0xAF8000FF );
+
+    // ??? why is this necessary
+    uint32_t ptr = ((uint32_t)list[0]) + 4;
+    MMIO32(ptr) = 0x00000000;
+    ADVANCE_DISPLAY_LIST_PTR;
+    */
+
+   MMIO32(((uint32_t)list[0]) + 0) = 0xAF0000FF | (mode_bits >> 32);
+   MMIO32(((uint32_t)list[0]) + 4) = (mode_bits & 0x00000000FFFFFFFF);
+   ADVANCE_DISPLAY_LIST_PTR;
+}
+
+void rdp_set_combine_mode( display_list_t **list, uint64_t combine_mode )
+{
+    // Color formula: (A - B) * C + D
+
+    list[0]->words.hi = ( 0xBC000000 | (combine_mode >> 32) );
+    MMIO32(((uint32_t)list[0]) + 4) = (combine_mode & 0x00000000FFFFFFFF);
+
     ADVANCE_DISPLAY_LIST_PTR; 
 }
 
@@ -465,7 +482,7 @@ void rdp_enable_texture_copy( display_list_t **list )
 {
     /* Set other modes to copy and other defaults */
     list[0]->words.hi = ( 0xAFA000FF );
-    list[0]->words.lo = ( 0x00004001 );
+    list[0]->words.lo = ( 0x00004000 );
     ADVANCE_DISPLAY_LIST_PTR;
 }
 
@@ -495,7 +512,7 @@ void rdp_enable_texture_copy( display_list_t **list )
  *
  * @return The amount of texture memory in bytes that was consumed by this texture.
  */
-static uint32_t __rdp_load_texture( display_list_t **list, uint32_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite, int sl, int tl, int sh, int th )
+static uint32_t __rdp_load_texture( display_list_t **list, texslot_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite, int sl, int tl, int sh, int th )
 {
     /* Invalidate data associated with sprite in cache */
     if( flush_strategy == FLUSH_STRATEGY_AUTOMATIC )
@@ -503,9 +520,10 @@ static uint32_t __rdp_load_texture( display_list_t **list, uint32_t texslot, uin
         data_cache_hit_writeback_invalidate( sprite->data, sprite->width * sprite->height * sprite->bitdepth );
     }
 
+    // SetTextureImage
     /* Point the RDP at the actual sprite data */
     list[0]->words.hi = ( 0xBD000000 | ((sprite->bitdepth == 2) ? 0x00100000 : 0x00180000) | (sprite->width - 1) );
-    list[0]->words.lo = ( (uint32_t)sprite->data );
+    list[0]->words.lo = ( (uint32_t)*sprite->data );
     ADVANCE_DISPLAY_LIST_PTR;
 
     /* Figure out the s,t coordinates of the sprite we are copying out of */
@@ -521,17 +539,35 @@ static uint32_t __rdp_load_texture( display_list_t **list, uint32_t texslot, uin
     /* Because we are dividing by 8, we want to round up if we have a remainder */
     int round_amount = (real_width % 8) ? 1 : 0;
 
+    // SetTile
     /* Instruct the RDP to copy the sprite data out */
     list[0]->words.hi = ( 0xB5000000 | ((sprite->bitdepth == 2) ? 0x00100000 : 0x00180000) | 
                                        (((((real_width / 8) + round_amount) * sprite->bitdepth) & 0x1FF) << 9) | ((texloc / 8) & 0x1FF) );
     list[0]->words.lo = ( ((texslot & 0x7) << 24) | (mirror_enabled == MIRROR_ENABLED ? 0x40100 : 0) | (hbits << 14 ) | (wbits << 4) );
     ADVANCE_DISPLAY_LIST_PTR;
 
+    // LoadSync
+    rdp_sync(list, SYNC_LOAD);
+
+    // LoadTile
     /* Copying out only a chunk this time */
     list[0]->words.hi = ( 0xB4000000 | (((sl << 2) & 0xFFF) << 12) | ((tl << 2) & 0xFFF) );
-    list[0]->words.lo = ( (((sh << 2) & 0xFFF) << 12) | ((th << 2) & 0xFFF) );
+    list[0]->words.lo = ( ((texslot & 0x7) << 24) | (((sh << 2) & 0xFFF) << 12) | ((th << 2) & 0xFFF) );
     ADVANCE_DISPLAY_LIST_PTR;
 
+	rdp_sync(list, SYNC_TILE);
+
+    // SetTile
+    /* Instruct the RDP to copy the sprite data out */
+    list[0]->words.hi = ( 0xB5000000 | ((sprite->bitdepth == 2) ? 0x00100000 : 0x00180000) | 
+                                       (((((real_width / 8) + round_amount) * sprite->bitdepth) & 0x1FF) << 9) | ((texloc / 8) & 0x1FF) );
+    list[0]->words.lo = ( ((texslot & 0x7) << 24) | (mirror_enabled == MIRROR_ENABLED ? 0x40100 : 0) | (hbits << 14 ) | (wbits << 4) );
+    ADVANCE_DISPLAY_LIST_PTR;
+
+    // SetTileSize
+    list[0]->words.hi = ( 0xB2000000 );
+    list[0]->words.lo = ( ((texslot & 0x7) << 24) | (((sh << 2) & 0xFFF) << 12) | ((th << 2) & 0xFFF) );
+    ADVANCE_DISPLAY_LIST_PTR;
 
     /* Save sprite width and height for managed sprite commands */
     cache[texslot & 0x7].width = twidth - 1;
@@ -542,6 +578,46 @@ static uint32_t __rdp_load_texture( display_list_t **list, uint32_t texslot, uin
     /* Return the amount of texture memory consumed by this texture */
     return ((real_width / 8) + round_amount) * 8 * real_height * sprite->bitdepth;
 }
+
+
+void rdp_load_texture_test( display_list_t **list, texslot_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite, int sl, int tl, int sh, int th )
+{
+    /*
+    For example, the GBI macro gsDPLoadTextureTile performs all the tile and load commands necessary to load a texture tile. The sequence of commands is shown below (macros shown without parameters):
+
+    gsDPSetTextureImage
+    gsDPSetTile         // G_TX_LOADTILE
+    gsDPLoadSync
+    gsDPLoadTile        // G_TX_LOADTILE
+    gsDPSetTile         // G_TX_RENDERTILE
+    gsDPSetTileSize     // G_TX_RENDERTILE
+    */
+
+    //SetTextureImage
+    list[0]->words.hi = ( 0xBD000000 | (3 << (51-32)) | (15 << (32-32)) );
+    MMIO32(((uint32_t)list[0]) + 4) = (uint32_t)*sprite->data;
+    ADVANCE_DISPLAY_LIST_PTR;
+
+    //SetTile
+    list[0]->words.hi = ( 0xB5000000 | (3 << (51-32)) | (8 << (41-32)) );
+    MMIO32(((uint32_t)list[0]) + 4) = 0x00010040;
+    ADVANCE_DISPLAY_LIST_PTR; 
+
+    rdp_sync(list, SYNC_LOAD);
+
+    //LoadTile
+    list[0]->words.hi = ( 0xB4000000 );
+    MMIO32(((uint32_t)list[0]) + 4) = 0x0003C03C;
+    ADVANCE_DISPLAY_LIST_PTR; 
+
+    rdp_sync(list, SYNC_TILE);
+
+    //SetTileSize
+    list[0]->words.hi = ( 0xB2000000 );
+    MMIO32(((uint32_t)list[0]) + 4) = 0x0003C03C;
+    ADVANCE_DISPLAY_LIST_PTR; 
+}
+
 
 /**
  * @brief Load a sprite into RDP TMEM
@@ -557,7 +633,7 @@ static uint32_t __rdp_load_texture( display_list_t **list, uint32_t texslot, uin
  *
  * @return The number of bytes consumed in RDP TMEM by loading this sprite
  */
-uint32_t rdp_load_texture( display_list_t **list, uint32_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite )
+uint32_t rdp_load_texture( display_list_t **list, texslot_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite )
 {
     if( !sprite ) { return 0; }
 
@@ -593,7 +669,7 @@ uint32_t rdp_load_texture( display_list_t **list, uint32_t texslot, uint32_t tex
  *
  * @return The number of bytes consumed in RDP TMEM by loading this sprite
  */
-uint32_t rdp_load_texture_stride( display_list_t **list, uint32_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite, int offset )
+uint32_t rdp_load_texture_stride( display_list_t **list, texslot_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite, int offset )
 {
     if( !sprite ) { return 0; }
 
@@ -635,10 +711,10 @@ uint32_t rdp_load_texture_stride( display_list_t **list, uint32_t texslot, uint3
  * @param[in] y_scale
  *            Vertical scaling factor
  */
-void rdp_draw_textured_rectangle_scaled( uint32_t texslot, int tx, int ty, int bx, int by, double x_scale, double y_scale )
+void rdp_draw_textured_rectangle_scaled( display_list_t **list, texslot_t texslot, int tx, int ty, int bx, int by, double x_scale, double y_scale )
 {
-    uint16_t s = cache[texslot & 0x7].s << 5;
-    uint16_t t = cache[texslot & 0x7].t << 5;
+    uint16_t s = 0;// cache[texslot & 0x7].s << 5;
+    uint16_t t = 0;//cache[texslot & 0x7].t << 5;
 
     /* Cant display < 0, so must clip size and move S,T coord accordingly */
     if( tx < 0 )
@@ -654,16 +730,18 @@ void rdp_draw_textured_rectangle_scaled( uint32_t texslot, int tx, int ty, int b
     }
 
     /* Calculate the scaling constants based on a 6.10 fixed point system */
-    int xs = (int)((1.0 / x_scale) * 4096.0);
+    int xs = (int)((1.0 / x_scale) * 1024.0);
     int ys = (int)((1.0 / y_scale) * 1024.0);
 
     /* Set up rectangle position in screen space */
-    __rdp_ringbuffer_queue( 0xA4000000 | (bx << 14) | (by << 2) );
-    __rdp_ringbuffer_queue( ((texslot & 0x7) << 24) | (tx << 14) | (ty << 2) );
+    MMIO32(((uint32_t)list[0]) + 0) = ( 0xA4000000 | (bx << 14) | (by << 2) );
+    MMIO32(((uint32_t)list[0]) + 4) = ( ((texslot & 0x7) << 24) | (tx << 14) | (ty << 2) );
+    ADVANCE_DISPLAY_LIST_PTR;
 
     /* Set up texture position and scaling to 1:1 copy */
-    __rdp_ringbuffer_queue( (s << 16) | t );
-    __rdp_ringbuffer_queue( (xs & 0xFFFF) << 16 | (ys & 0xFFFF) );
+    MMIO32(((uint32_t)list[0]) + 0) = ( (s << 16) | t );
+    MMIO32(((uint32_t)list[0]) + 4) = ( (xs & 0xFFFF) << 16 | (ys & 0xFFFF) );
+    ADVANCE_DISPLAY_LIST_PTR;
 
 }
 
@@ -688,10 +766,10 @@ void rdp_draw_textured_rectangle_scaled( uint32_t texslot, int tx, int ty, int b
  * @param[in] by
  *            The pixel Y location of the bottom right of the rectangle
  */
-void rdp_draw_textured_rectangle( uint32_t texslot, int tx, int ty, int bx, int by )
+void rdp_draw_textured_rectangle( display_list_t **list, texslot_t texslot, int tx, int ty, int bx, int by )
 {
     /* Simple wrapper */
-    rdp_draw_textured_rectangle_scaled( texslot, tx, ty, bx, by, 1.0, 1.0 );
+    rdp_draw_textured_rectangle_scaled( list, texslot, tx, ty, bx, by, 1.0, 1.0 );
 }
 
 /**
@@ -709,10 +787,10 @@ void rdp_draw_textured_rectangle( uint32_t texslot, int tx, int ty, int bx, int 
  * @param[in] y
  *            The pixel Y location of the top left of the sprite
  */
-void rdp_draw_sprite( uint32_t texslot, int x, int y )
+void rdp_draw_sprite( display_list_t **list, texslot_t texslot, int x, int y )
 {
     /* Just draw a rectangle the size of the sprite */
-    rdp_draw_textured_rectangle_scaled( texslot, x, y, x + cache[texslot & 0x7].width, y + cache[texslot & 0x7].height, 1.0, 1.0 );
+    rdp_draw_textured_rectangle_scaled( list, texslot, x, y, x + cache[texslot & 0x7].width, y + cache[texslot & 0x7].height, 1.0, 1.0 );
 }
 
 /**
@@ -734,14 +812,14 @@ void rdp_draw_sprite( uint32_t texslot, int x, int y )
  * @param[in] y_scale
  *            Vertical scaling factor
  */
-void rdp_draw_sprite_scaled( uint32_t texslot, int x, int y, double x_scale, double y_scale )
+void rdp_draw_sprite_scaled( display_list_t **list, texslot_t texslot, int x, int y, double x_scale, double y_scale )
 {
     /* Since we want to still view the whole sprite, we must resize the rectangle area too */
     int new_width = (int)(((double)cache[texslot & 0x7].width * x_scale) + 0.5);
     int new_height = (int)(((double)cache[texslot & 0x7].height * y_scale) + 0.5);
     
     /* Draw a rectangle the size of the new sprite */
-    rdp_draw_textured_rectangle_scaled( texslot, x, y, x + new_width, y + new_height, x_scale, y_scale );
+    rdp_draw_textured_rectangle_scaled( list, texslot, x, y, x + new_width, y + new_height, x_scale, y_scale );
 }
 
 /**
