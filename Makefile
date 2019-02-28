@@ -74,6 +74,7 @@ install: libdragon.a libdragonsys.a libdragonpp.a
 	install -m 0644 include/fixed.h $(INSTALLDIR)/mips64/include/fixed.h
 	install -m 0644 include/libdragon.h $(INSTALLDIR)/mips64/include/libdragon.h
 	install -m 0644 include/ucode.S $(INSTALLDIR)/mips64/include/ucode.S
+	install -m 0644 include/64drive.h $(INSTALLDIR)/mips64/include/64drive.h
 
 clean:
 	rm -f *.o *.a

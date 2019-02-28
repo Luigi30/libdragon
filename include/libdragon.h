@@ -60,5 +60,6 @@
 #include "exception.h"
 #include "dir.h"
 #include "fixed.h"
+#include "64drive.h"
 
 #endif

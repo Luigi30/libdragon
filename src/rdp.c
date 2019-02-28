@@ -77,6 +77,8 @@
 /**
  * @brief Cached sprite structure
  * */
+
+char _64Drive_buf[512];
 typedef struct
 {
     /** @brief S location of the top left of the texture relative to the original texture */
@@ -212,7 +214,7 @@ static void __rdp_ringbuffer_queue( uint32_t data )
 void rdp_end_display_list( display_list_t **list )
 {
     // Add a sentinel to the list to make sure we know when it's over.
-    list[0]->command = 0xFFFFFFFFFFFFFFFF;
+    list[0]->command = 0x7FFFFFFFFFFFFFFF;
     ADVANCE_DISPLAY_LIST_PTR;  
 }
 
@@ -522,9 +524,13 @@ static uint32_t __rdp_load_texture( display_list_t **list, texslot_t texslot, ui
 
     // SetTextureImage
     /* Point the RDP at the actual sprite data */
-    list[0]->words.hi = ( 0xBD000000 | ((sprite->bitdepth == 2) ? 0x00100000 : 0x00180000) | (sprite->width - 1) );
+    list[0]->words.hi = ( 0xBD000000 | (sprite->format << (53-32)) | (sprite->pixel_size << (51-32)) | (sprite->width - 1) );
     list[0]->words.lo = ( (uint32_t)*sprite->data );
     ADVANCE_DISPLAY_LIST_PTR;
+
+    sprintf(_64Drive_buf, "SetTextureImage: format is %d, pixel_size is %d, width is %d, data ptr is %08X\n", 
+        sprite->format, sprite->pixel_size, sprite->width - 1, (uint32_t)*sprite->data);
+    //_64Drive_putstring(_64Drive_buf);
 
     /* Figure out the s,t coordinates of the sprite we are copying out of */
     int twidth = sh - sl + 1;
@@ -541,10 +547,14 @@ static uint32_t __rdp_load_texture( display_list_t **list, texslot_t texslot, ui
 
     // SetTile
     /* Instruct the RDP to copy the sprite data out */
-    list[0]->words.hi = ( 0xB5000000 | ((sprite->bitdepth == 2) ? 0x00100000 : 0x00180000) | 
-                                       (((((real_width / 8) + round_amount) * sprite->bitdepth) & 0x1FF) << 9) | ((texloc / 8) & 0x1FF) );
-    list[0]->words.lo = ( ((texslot & 0x7) << 24) | (mirror_enabled == MIRROR_ENABLED ? 0x40100 : 0) | (hbits << 14 ) | (wbits << 4) );
+    list[0]->words.hi = ( 0xB5000000 | (sprite->format << (53-32)) | (sprite->pixel_size << (51-32)) |
+                                       (((sprite->width / sprite->bitdepth)) << 9) | ((texloc / 8) & 0x1FF) );
+    list[0]->words.lo = ( ((texslot & 0x7) << 24) | (mirror_enabled == MIRROR_ENABLED ? 0x40100 : 0) | (hbits << 14) | (wbits << 4) );
     ADVANCE_DISPLAY_LIST_PTR;
+
+    sprintf(_64Drive_buf, "SetTile: width in 64-bit words is %d. texture loaded to %08X in TMEM. hbits %d, wbits %d\n", 
+        sprite->width / sprite->bitdepth, (texloc/8) & 0x1FF, hbits, wbits);
+    //_64Drive_putstring(_64Drive_buf);
 
     // LoadSync
     rdp_sync(list, SYNC_LOAD);
@@ -555,13 +565,17 @@ static uint32_t __rdp_load_texture( display_list_t **list, texslot_t texslot, ui
     list[0]->words.lo = ( ((texslot & 0x7) << 24) | (((sh << 2) & 0xFFF) << 12) | ((th << 2) & 0xFFF) );
     ADVANCE_DISPLAY_LIST_PTR;
 
+    sprintf(_64Drive_buf, "LoadTile: sl %d tl %d sh %d th %d\n", 
+        sl, tl, sh, th);
+    //_64Drive_putstring(_64Drive_buf);    
+
 	rdp_sync(list, SYNC_TILE);
 
     // SetTile
     /* Instruct the RDP to copy the sprite data out */
-    list[0]->words.hi = ( 0xB5000000 | ((sprite->bitdepth == 2) ? 0x00100000 : 0x00180000) | 
-                                       (((((real_width / 8) + round_amount) * sprite->bitdepth) & 0x1FF) << 9) | ((texloc / 8) & 0x1FF) );
-    list[0]->words.lo = ( ((texslot & 0x7) << 24) | (mirror_enabled == MIRROR_ENABLED ? 0x40100 : 0) | (hbits << 14 ) | (wbits << 4) );
+    list[0]->words.hi = ( 0xB5000000 | (sprite->format << (53-32)) | (sprite->pixel_size << (51-32)) |
+                                       (((sprite->width / sprite->bitdepth)) << 9) | ((texloc / 8) & 0x1FF) );
+    list[0]->words.lo = ( ((texslot & 0x7) << 24) | (mirror_enabled == MIRROR_ENABLED ? 0x40100 : 0) | (hbits << 14) | (wbits << 4) );
     ADVANCE_DISPLAY_LIST_PTR;
 
     // SetTileSize
@@ -575,6 +589,8 @@ static uint32_t __rdp_load_texture( display_list_t **list, texslot_t texslot, ui
     cache[texslot & 0x7].s = sl;
     cache[texslot & 0x7].t = tl;
     
+    //_64Drive_putstring("*** end ***");
+
     /* Return the amount of texture memory consumed by this texture */
     return ((real_width / 8) + round_amount) * 8 * real_height * sprite->bitdepth;
 }
@@ -636,6 +652,9 @@ void rdp_load_texture_test( display_list_t **list, texslot_t texslot, uint32_t t
 uint32_t rdp_load_texture( display_list_t **list, texslot_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite )
 {
     if( !sprite ) { return 0; }
+
+    //sprintf(_64Drive_buf, "rdp_load_texture: width %d height %d\n", sprite->width, sprite->height);
+    //_64Drive_putstring(_64Drive_buf);
 
     return __rdp_load_texture( list, texslot, texloc, mirror_enabled, sprite, 0, 0, sprite->width - 1, sprite->height - 1 );
 }
@@ -711,10 +730,16 @@ uint32_t rdp_load_texture_stride( display_list_t **list, texslot_t texslot, uint
  * @param[in] y_scale
  *            Vertical scaling factor
  */
-void rdp_draw_textured_rectangle_scaled( display_list_t **list, texslot_t texslot, int tx, int ty, int bx, int by, double x_scale, double y_scale )
+void rdp_draw_textured_rectangle_scaled( display_list_t **list, texslot_t texslot, int tx, int ty, int bx, int by, double x_scale, double y_scale, int s_ul, int t_ul )
 {
-    uint16_t s = 0;// cache[texslot & 0x7].s << 5;
-    uint16_t t = 0;//cache[texslot & 0x7].t << 5;
+    //uint16_t s = 0;// cache[texslot & 0x7].s << 5;
+    //uint16_t t = 0;//cache[texslot & 0x7].t << 5;
+
+    //uint16_t s = cache[texslot & 0x7].s << 5;
+    //uint16_t t = cache[texslot & 0x7].t << 5;
+
+    uint16_t s = s_ul;
+    uint16_t t = t_ul;
 
     /* Cant display < 0, so must clip size and move S,T coord accordingly */
     if( tx < 0 )
@@ -743,6 +768,8 @@ void rdp_draw_textured_rectangle_scaled( display_list_t **list, texslot_t texslo
     MMIO32(((uint32_t)list[0]) + 4) = ( (xs & 0xFFFF) << 16 | (ys & 0xFFFF) );
     ADVANCE_DISPLAY_LIST_PTR;
 
+    
+
 }
 
 /**
@@ -769,7 +796,7 @@ void rdp_draw_textured_rectangle_scaled( display_list_t **list, texslot_t texslo
 void rdp_draw_textured_rectangle( display_list_t **list, texslot_t texslot, int tx, int ty, int bx, int by )
 {
     /* Simple wrapper */
-    rdp_draw_textured_rectangle_scaled( list, texslot, tx, ty, bx, by, 1.0, 1.0 );
+    rdp_draw_textured_rectangle_scaled( list, texslot, tx, ty, bx, by, 1.0, 1.0, 0, 0 );
 }
 
 /**
@@ -790,7 +817,7 @@ void rdp_draw_textured_rectangle( display_list_t **list, texslot_t texslot, int 
 void rdp_draw_sprite( display_list_t **list, texslot_t texslot, int x, int y )
 {
     /* Just draw a rectangle the size of the sprite */
-    rdp_draw_textured_rectangle_scaled( list, texslot, x, y, x + cache[texslot & 0x7].width, y + cache[texslot & 0x7].height, 1.0, 1.0 );
+    rdp_draw_textured_rectangle_scaled( list, texslot, x, y, x + cache[texslot & 0x7].width, y + cache[texslot & 0x7].height, 1.0, 1.0, 0, 0 );
 }
 
 /**
@@ -819,7 +846,7 @@ void rdp_draw_sprite_scaled( display_list_t **list, texslot_t texslot, int x, in
     int new_height = (int)(((double)cache[texslot & 0x7].height * y_scale) + 0.5);
     
     /* Draw a rectangle the size of the new sprite */
-    rdp_draw_textured_rectangle_scaled( list, texslot, x, y, x + new_width, y + new_height, x_scale, y_scale );
+    rdp_draw_textured_rectangle_scaled( list, texslot, x, y, x + new_width, y + new_height, x_scale, y_scale, 0, 0 );
 }
 
 /**

@@ -14,6 +14,7 @@ OFILES_LD += $(CURDIR)/build/rsp.o
 OFILES_LD += $(CURDIR)/build/dma.o
 OFILES_LD += $(CURDIR)/build/timer.o
 OFILES_LD += $(CURDIR)/build/exception.o
+OFILES_LD += $(CURDIR)/build/64drive.o
 
 OFILES_LDS  = $(CURDIR)/build/system.o
 
@@ -33,6 +34,7 @@ OFILES_LDP += $(CURDIR)/build/dma.o
 OFILES_LDP += $(CURDIR)/build/timer.o
 OFILES_LDP += $(CURDIR)/build/exception.o
 OFILES_LDP += $(CURDIR)/build/do_ctors.o
+OFILES_LDP += $(CURDIR)/build/64drive.o
 
 # Rules for compiling system stuff
 $(CURDIR)/build/n64sys.o: $(CURDIR)/src/n64sys.c
@@ -108,3 +110,8 @@ $(CURDIR)/build/entrypoint_2.o: $(CURDIR)/src/entrypoint_2.S
 $(CURDIR)/build/do_ctors.o: $(CURDIR)/src/do_ctors.c
 	mkdir -p $(CURDIR)/build
 	$(CC) $(CFLAGS) -c -o $(CURDIR)/build/do_ctors.o $(CURDIR)/src/do_ctors.c
+
+$(CURDIR)/build/64drive.o: $(CURDIR)/src/64drive.c
+	mkdir -p $(CURDIR)/build
+	$(CC) $(CFLAGS) -c -o $(CURDIR)/build/64drive.o $(CURDIR)/src/64drive.c
+

@@ -303,7 +303,7 @@ void rdp_enable_texture_copy( display_list_t **list );
 uint32_t rdp_load_texture( display_list_t **list, texslot_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite );
 uint32_t rdp_load_texture_stride( display_list_t **list, texslot_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite, int offset );
 void rdp_draw_textured_rectangle( display_list_t **list, texslot_t texslot, int tx, int ty, int bx, int by );
-void rdp_draw_textured_rectangle_scaled( display_list_t **list, texslot_t texslot, int tx, int ty, int bx, int by, double x_scale, double y_scale );
+void rdp_draw_textured_rectangle_scaled( display_list_t **list, texslot_t texslot, int tx, int ty, int bx, int by, double x_scale, double y_scale, int s_ul, int t_ul );
 void rdp_draw_sprite( display_list_t **list, texslot_t texslot, int x, int y );
 void rdp_draw_sprite_scaled( display_list_t **list, texslot_t texslot, int x, int y, double x_scale, double y_scale );
 void rdp_set_primitive_color( display_list_t **list, uint32_t color );

@@ -13,6 +13,24 @@
  * @{
  */
 
+/** @brief Texture format */
+typedef enum
+{
+    TEX_FORMAT_RGBA,
+    TEX_FORMAT_YUV,
+    TEX_FORMAT_CI,
+    TEX_FORMAT_IA,
+    TEX_FORMAT_I
+} texture_format_t;
+
+typedef enum
+{
+    TEX_SIZE_4BIT,
+    TEX_SIZE_8BIT,
+    TEX_SIZE_16BIT,
+    TEX_SIZE_32BIT
+} texture_size_t;
+
 /** @brief Generic color structure */
 typedef struct
 {
@@ -39,11 +57,17 @@ typedef struct
      * A 32 bit sprite would have a value of '4' here
      */
     uint8_t bitdepth;
+
     /** 
-     * @brief Sprite format
-     * @note Currently unused
+     * @brief Texture format
      */
-    uint8_t format;
+    texture_format_t format;
+
+    /** 
+     * @brief Texture pixel size
+     */
+    texture_size_t pixel_size;
+
     /** @brief Number of horizontal slices for spritemaps */
     uint8_t hslices;
     /** @brief Number of vertical slices for spritemaps */
