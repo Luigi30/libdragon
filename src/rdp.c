@@ -215,7 +215,35 @@ void rdp_end_display_list( display_list_t **list )
 {
     // Add a sentinel to the list to make sure we know when it's over.
     list[0]->command = 0x7FFFFFFFFFFFFFFF;
-    ADVANCE_DISPLAY_LIST_PTR;  
+    ADVANCE_DISPLAY_LIST_PTR; 
+}
+
+/**
+ * @brief Add a sentinel to the end of the display list for use with the library's send function.
+ *
+ * @param[in] list
+ *            A display list pointer.
+ */
+void rdp_set_color_image( display_list_t **list, RDP_IMAGE_DATA_FORMAT format, RDP_PIXEL_WIDTH pixelwidth, uint16_t imagewidth, uint16_t *buffer )
+{
+    // Add a sentinel to the list to make sure we know when it's over.
+    list[0]->words.hi = 0xBF000000 | (format << 20) | (pixelwidth << 19) | imagewidth;
+    list[0]->words.lo = ((uint32_t)buffer) & 0x00FFFFFF;
+    ADVANCE_DISPLAY_LIST_PTR; 
+}
+
+/**
+ * @brief Add a sentinel to the end of the display list for use with the library's send function.
+ *
+ * @param[in] list
+ *            A display list pointer.
+ */
+void rdp_set_z_image( display_list_t **list, uint16_t *buffer )
+{
+    // Add a sentinel to the list to make sure we know when it's over.
+    list[0]->words.hi = 0xBE000000;
+    list[0]->words.lo = (uint32_t)buffer;
+    ADVANCE_DISPLAY_LIST_PTR; 
 }
 
 /**
@@ -314,7 +342,7 @@ bool rdp_attach_display( display_list_t **list, display_context_t disp )
 
     /* Set the rasterization buffer */
     list[0]->words.hi = 0xBF000000 | ((__bitdepth == 2) ? 0x00100000 : 0x00180000) | (__width - 1);
-    list[0]->words.lo = (uint32_t)__get_buffer( disp );
+    list[0]->words.lo = ((uint32_t)__get_buffer( disp )) & 0x00FFFFFF;
     ADVANCE_DISPLAY_LIST_PTR; 
 
     return true;
@@ -410,19 +438,6 @@ void rdp_set_default_clipping( display_list_t **list )
 {
     /* Clip box is the whole screen */
     rdp_set_clipping( list, 0, 0, __width, __height );
-}
-
-/**
- * @brief Enable display of 2D filled (untextured) rectangles
- *
- * This must be called before using #rdp_draw_filled_rectangle.
- */
-void rdp_set_fill_color( display_list_t **list, uint32_t color )
-{
-    /* Set other modes to fill and other defaults */
-    list[0]->words.hi = ( 0xB7000000 );
-    list[0]->words.lo = ( color );
-    ADVANCE_DISPLAY_LIST_PTR; 
 }
 
 void rdp_set_fill_mode( display_list_t **list )

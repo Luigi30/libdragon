@@ -14,6 +14,33 @@
 #define MMIO16(x) (*(volatile uint16_t *)(x))
 #define MMIO32(x) (*(volatile uint32_t *)(x))
 
+/*
+ * Maximum z-buffer value, used to initialize the z-buffer.
+ * Note : this number is NOT the viewport z-scale constant.
+ * See the comment next to G_MAXZ for more info.
+ */
+#define G_MAXFBZ                0x3fff  /* 3b exp, 11b mantissa */
+
+#define GPACK_RGBA5551(r, g, b, a)      ((((r)<<8) & 0xf800) |          \
+                                         (((g)<<3) & 0x7c0) |           \
+                                         (((b)>>2) & 0x3e) | ((a) & 0x1))
+#define GPACK_ZDZ(z, dz)                ((z) << 2 | (dz))
+
+typedef enum {
+    RDP_IMAGE_RGBA,
+    RDP_IMAGE_YUV,
+    RDP_IMAGE_COLORINDEX,
+    RDP_IMAGE_IA,
+    RDP_IMAGE_I
+} RDP_IMAGE_DATA_FORMAT;
+
+typedef enum {
+    RDP_PIXEL_4BIT,
+    RDP_PIXEL_8BIT,
+    RDP_PIXEL_16BIT,
+    RDP_PIXEL_32BIT
+} RDP_PIXEL_WIDTH;
+
 /**
  * @addtogroup rdp
  * @{
@@ -286,6 +313,27 @@ typedef enum
 #define MODE_DITHER_ALPHA_EN            (1 << 1)
 #define MODE_ALPHA_COMPARE_EN           (1 << 0)
 
+/* compatibility with N64 libs */
+#define	G_BL_CLR_IN	    0
+#define	G_BL_CLR_MEM	1
+#define	G_BL_CLR_BL	    2
+#define	G_BL_CLR_FOG	3
+#define	G_BL_1MA	    0
+#define	G_BL_A_MEM	    1
+#define	G_BL_A_IN	    0
+#define	G_BL_A_FOG	    1
+#define	G_BL_A_SHADE	2
+#define	G_BL_1		    2
+#define	G_BL_0		    3
+
+#define	GBL_c1(m1a, m1b, m2a, m2b)	\
+	(m1a) << 30 | (m1b) << 26 | (m2a) << 22 | (m2b) << 18
+#define	GBL_c2(m1a, m1b, m2a, m2b)	\
+	(m1a) << 28 | (m1b) << 24 | (m2a) << 20 | (m2b) << 16
+
+#define	RM_AA_ZB_OPA_SURF(clk)					        \
+	GBL_c##clk(G_BL_CLR_IN, G_BL_A_IN, G_BL_CLR_MEM, G_BL_A_MEM)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -317,6 +365,8 @@ void rdp_close( void );
 void rdp_set_combine_mode( display_list_t **list, uint64_t combine_mode );
 void rdp_set_other_modes( display_list_t **list, uint64_t mode_bits );
 void rdp_set_fill_color( display_list_t **list, uint32_t color );
+void rdp_set_color_image( display_list_t **list, RDP_IMAGE_DATA_FORMAT format, RDP_PIXEL_WIDTH pixelwidth, uint16_t imagewidth, uint16_t *buffer );
+void rdp_set_z_image( display_list_t **list, uint16_t *buffer );
 
 void rdp_load_texture_test( display_list_t **list, texslot_t texslot, uint32_t texloc, mirror_t mirror_enabled, sprite_t *sprite, int sl, int tl, int sh, int th );
 
