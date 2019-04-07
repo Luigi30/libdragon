@@ -540,11 +540,11 @@ static uint32_t __rdp_load_texture( display_list_t **list, texslot_t texslot, ui
     // SetTextureImage
     /* Point the RDP at the actual sprite data */
     list[0]->words.hi = ( 0xBD000000 | (sprite->format << (53-32)) | (sprite->pixel_size << (51-32)) | (sprite->width - 1) );
-    list[0]->words.lo = ( (uint32_t)*sprite->data );
+    list[0]->words.lo = ( (uint32_t)(sprite->data) );
     ADVANCE_DISPLAY_LIST_PTR;
 
     sprintf(_64Drive_buf, "SetTextureImage: format is %d, pixel_size is %d, width is %d, data ptr is %08X\n", 
-        sprite->format, sprite->pixel_size, sprite->width - 1, (uint32_t)*sprite->data);
+        sprite->format, sprite->pixel_size, sprite->width - 1, (uint32_t)(sprite->data));
     //_64Drive_putstring(_64Drive_buf);
 
     /* Figure out the s,t coordinates of the sprite we are copying out of */
@@ -563,7 +563,7 @@ static uint32_t __rdp_load_texture( display_list_t **list, texslot_t texslot, ui
     // SetTile
     /* Instruct the RDP to copy the sprite data out */
     list[0]->words.hi = ( 0xB5000000 | (sprite->format << (53-32)) | (sprite->pixel_size << (51-32)) |
-                                       (((sprite->width / sprite->bitdepth)) << 9) | ((texloc / 8) & 0x1FF) );
+                                       (((sprite->width / sprite->bitdepth) / 2) << 9) | ((texloc / 8) & 0x1FF) );
     list[0]->words.lo = ( ((texslot & 0x7) << 24) | (mirror_enabled == MIRROR_ENABLED ? 0x40100 : 0) | (hbits << 14) | (wbits << 4) );
     ADVANCE_DISPLAY_LIST_PTR;
 
@@ -589,7 +589,7 @@ static uint32_t __rdp_load_texture( display_list_t **list, texslot_t texslot, ui
     // SetTile
     /* Instruct the RDP to copy the sprite data out */
     list[0]->words.hi = ( 0xB5000000 | (sprite->format << (53-32)) | (sprite->pixel_size << (51-32)) |
-                                       (((sprite->width / sprite->bitdepth)) << 9) | ((texloc / 8) & 0x1FF) );
+                                       (((sprite->width / sprite->bitdepth) / 2) << 9) | ((texloc / 8) & 0x1FF) );
     list[0]->words.lo = ( ((texslot & 0x7) << 24) | (mirror_enabled == MIRROR_ENABLED ? 0x40100 : 0) | (hbits << 14) | (wbits << 4) );
     ADVANCE_DISPLAY_LIST_PTR;
 
@@ -626,7 +626,7 @@ void rdp_load_texture_test( display_list_t **list, texslot_t texslot, uint32_t t
 
     //SetTextureImage
     list[0]->words.hi = ( 0xBD000000 | (3 << (51-32)) | (15 << (32-32)) );
-    MMIO32(((uint32_t)list[0]) + 4) = (uint32_t)*sprite->data;
+    MMIO32(((uint32_t)list[0]) + 4) = (uint32_t)(sprite->data);
     ADVANCE_DISPLAY_LIST_PTR;
 
     //SetTile

@@ -74,7 +74,7 @@ typedef struct
     uint8_t vslices;
 
     /** @brief Start of graphics data */
-    uint32_t data[0];
+    void *data;
 } sprite_t;
 
 #ifdef __cplusplus
