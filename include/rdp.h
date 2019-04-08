@@ -259,18 +259,18 @@ typedef enum
 
 
 // Set Other Modes
-#define MODE_ATOMIC_PRIM                (1 << 55)
+#define MODE_ATOMIC_PRIM                (1 << 55)   // Atomic primitives - finish drawing one primitive before drawing another.
 
-#define MODE_CYCLE_TYPE_1CYCLE          (0 << 52)
-#define MODE_CYCLE_TYPE_2CYCLE          (1 << 52)
-#define MODE_CYCLE_TYPE_COPY            (2 << 52)
-#define MODE_CYCLE_TYPE_FILL            (3 << 52)
+#define MODE_CYCLE_TYPE_1CYCLE          (0 << 52)   // 1-cycle rendering mode.
+#define MODE_CYCLE_TYPE_2CYCLE          (1 << 52)   // 2-cycle rendering mode.
+#define MODE_CYCLE_TYPE_COPY            (2 << 52)   // Straight copy.
+#define MODE_CYCLE_TYPE_FILL            (3 << 52)   // Fast fill mode, doesn't work for right-major polys (or was it left-major?)
 
-#define MODE_PERSP_TEX_EN               (1 << 51)
-#define MODE_DETAIL_TEX_EN              (1 << 50)
-#define MODE_SHARPEN_TEX_EN             (1 << 49)
+#define MODE_PERSP_TEX_EN               (1 << 51)   // Perspective-correct textures
+#define MODE_DETAIL_TEX_EN              (1 << 50)   // Detail filtering for textures
+#define MODE_SHARPEN_TEX_EN             (1 << 49)   // Sharpen filtering for textures
 #define MODE_TEX_LOD_EN                 (1 << 48)
-#define MODE_EN_TLUT                    (1 << 47)
+#define MODE_EN_TLUT                    (1 << 47)   // Enable TLUT if drawing a CI texture
 #define MODE_TLUT_TYPE                  (1 << 46)
 #define MODE_SAMPLE_TYPE                (1 << 45)
 #define MODE_MID_TEXEL                  (1 << 44)
@@ -334,7 +334,7 @@ typedef enum
 #define MODE_ALPHA_CVG_SELECT           (1 << 13)
 #define MODE_CVG_TIMES_ALPHA            (1 << 12)
 
-#define MODE_Z_MODE_OPAQUE              (0 << 10)
+#define MODE_Z_MODE_OPAQUE              (0 << 10)   // The Z buffer calculation modes.
 #define MODE_Z_MODE_INTERPENETRATING    (1 << 10)
 #define MODE_Z_MODE_TRANSPARENT         (2 << 10)
 #define MODE_Z_MODE_DECAL               (3 << 10)
@@ -346,12 +346,12 @@ typedef enum
 
 #define MODE_COLOR_ON_CVG               (1 << 7)
 #define MODE_IMAGE_READ_EN              (1 << 6)
-#define MODE_Z_UPDATE_EN                (1 << 5)
-#define MODE_Z_COMPARE_EN               (1 << 4)
-#define MODE_ANTIALIAS_EN               (1 << 3)
-#define MODE_Z_SOURCE_SEL               (1 << 2)
-#define MODE_DITHER_ALPHA_EN            (1 << 1)
-#define MODE_ALPHA_COMPARE_EN           (1 << 0)
+#define MODE_Z_UPDATE_EN                (1 << 5)    // 1 = Write new Z value to Z buffer when drawing a pixel.
+#define MODE_Z_COMPARE_EN               (1 << 4)    // Enable Z comparison, don't write pixel if Z compare fails.
+#define MODE_ANTIALIAS_EN               (1 << 3)    // 0 = no AA, 1 = yes AA
+#define MODE_Z_SOURCE_SEL               (1 << 2)    // 0 = primitive Z, 1 = pixel Z
+#define MODE_DITHER_ALPHA_EN            (1 << 1)    //
+#define MODE_ALPHA_COMPARE_EN           (1 << 0)    // Enable alpha channel - used for transparency and translucency.
 
 /* compatibility with N64 libs */
 #define	G_BL_CLR_IN	    0
